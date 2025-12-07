@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Builds / production
+build/
+dist/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
+.env.development
+.env.production
+
+# Lockfiles (optional if you use one package manager)
+# package-lock.json
+# pnpm-lock.yaml
+
