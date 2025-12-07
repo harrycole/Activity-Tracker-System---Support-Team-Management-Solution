@@ -14,7 +14,7 @@ class ActivityUpdate extends Model
     protected $fillable = [
         'update_id',
         'activity_id',
-        'user_id',
+        'updated_by',  // match migration
         'status',
         'remark',
     ];
@@ -39,6 +39,6 @@ class ActivityUpdate extends Model
 
     public function user()
     {
-        return $this->belongsTo(User::class, 'user_id', 'user_id');
+        return $this->belongsTo(User::class, 'updated_by', 'user_id'); // match migration
     }
 }
