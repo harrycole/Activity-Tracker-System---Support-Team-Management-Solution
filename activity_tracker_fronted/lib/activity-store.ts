@@ -1,111 +1,176 @@
-// Client-side activity store using localStorage
-interface Activity {
-  id: string
+// lib/activity-store.ts
+import axiosInstance from '@/lib/axiosInstance'
+
+export interface Activity {
+  activity_id: string
   title: string
-  description: string
+  description: string | null
   status: "pending" | "done"
-  createdBy: string
-  createdByName: string
-  createdByDepartment: string
-  createdAt: string
-  updatedAt: string
-  remark: string
-  updates: ActivityUpdate[]
+  created_by: string  // user_id
+  created_at: string
+  updated_at: string
+  // Your backend returns 'creator' not 'user'
+  creator?: {
+    user_id: string
+    name: string
+    department?: string | null
+    email: string
+    email_verified_at: string | null
+    created_at: string
+    updated_at: string
+  }
+  updates?: ActivityUpdate[]
 }
 
-interface ActivityUpdate {
-  id: string
+export interface ActivityUpdate {
+  update_id: string
+  activity_id: string
   status: "pending" | "done"
-  remark: string
-  updatedBy: string
-  updatedByName: string
-  updatedByDepartment: string
-  updatedAt: string
+  remark: string | null
+  updated_by: string  // user_id
+  created_at: string
+  updated_at: string
+  // Your backend might return this as 'updater' or similar
+  updater?: {
+    user_id: string
+    name: string
+    department?: string | null
+    email: string
+    email_verified_at: string | null
+    created_at: string
+    updated_at: string
+  }
 }
 
-export function getActivities(): Activity[] {
-  if (typeof window === "undefined") return []
-  const stored = localStorage.getItem("activities")
-  return stored ? JSON.parse(stored) : []
+// Fetch all activities from backend
+export async function fetchActivities(): Promise<Activity[]> {
+  try {
+    const response = await axiosInstance.get('/activities')
+    return response.data
+  } catch (error) {
+    console.error('Error fetching activities:', error)
+    return []
+  }
 }
 
-export function saveActivities(activities: Activity[]): void {
-  if (typeof window === "undefined") return
-  localStorage.setItem("activities", JSON.stringify(activities))
+// Fetch single activity by ID
+export async function fetchActivity(id: string): Promise<Activity | null> {
+  try {
+    const response = await axiosInstance.get(`/activities/${id}`)
+    return response.data
+  } catch (error) {
+    console.error('Error fetching activity:', error)
+    return null
+  }
 }
 
-export function createActivity(
+// Fetch activity updates by activity ID
+export async function fetchActivityUpdates(activityId: string): Promise<ActivityUpdate[]> {
+  try {
+    const response = await axiosInstance.get(`/activity-updates?activity_id=${activityId}`)
+    return response.data
+  } catch (error) {
+    console.error('Error fetching activity updates:', error)
+    return []
+  }
+}
+
+// Create new activity
+export async function createActivity(
   title: string,
   description: string,
-  userId: string,
-  userName: string,
-  userDepartment: string,
-): Activity {
-  const activity: Activity = {
-    id: Date.now().toString(),
-    title,
-    description,
-    status: "pending",
-    createdBy: userId,
-    createdByName: userName,
-    createdByDepartment: userDepartment,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    remark: "",
-    updates: [],
+  remark?: string
+): Promise<Activity | null> {
+  try {
+    const response = await axiosInstance.post('/activities', {
+      title,
+      description,
+      remark: remark || '',
+    })
+    return response.data
+  } catch (error) {
+    console.error('Error creating activity:', error)
+    return null
   }
-
-  const activities = getActivities()
-  activities.push(activity)
-  saveActivities(activities)
-
-  return activity
 }
 
-export function updateActivityStatus(
+// Update activity status
+export async function updateActivityStatus(
   activityId: string,
   status: "pending" | "done",
-  remark: string,
-  userId: string,
-  userName: string,
-  userDepartment: string,
-): Activity | null {
-  const activities = getActivities()
-  const activity = activities.find((a) => a.id === activityId)
-
-  if (!activity) return null
-
-  const update: ActivityUpdate = {
-    id: Date.now().toString(),
-    status,
-    remark,
-    updatedBy: userId,
-    updatedByName: userName,
-    updatedByDepartment: userDepartment,
-    updatedAt: new Date().toISOString(),
+  remark?: string
+): Promise<Activity | null> {
+  try {
+    // First update the activity status
+    const activityResponse = await axiosInstance.put(`/activities/${activityId}`, {
+      status,
+    })
+    
+    // If there's a remark, create an activity update
+    if (remark && remark.trim()) {
+      await axiosInstance.post('/activity-updates', {
+        activity_id: activityId,
+        status,
+        remark: remark.trim(),
+      })
+    }
+    
+    return activityResponse.data
+  } catch (error) {
+    console.error('Error updating activity:', error)
+    return null
   }
-
-  activity.status = status
-  activity.remark = remark
-  activity.updatedAt = new Date().toISOString()
-  activity.updates.push(update)
-
-  saveActivities(activities)
-  return activity
 }
 
-export function getActivitiesByDate(date: string): Activity[] {
-  const activities = getActivities()
-  return activities.filter((a) => a.createdAt.startsWith(date))
+// Fetch daily activities
+export async function fetchDailyActivities(date?: string): Promise<Activity[]> {
+  try {
+    const query = date ? `?date=${date}` : ''
+    const response = await axiosInstance.get(`/activities/daily${query}`)
+    return response.data
+  } catch (error) {
+    console.error('Error fetching daily activities:', error)
+    return []
+  }
 }
 
-export function getActivitiesByDateRange(startDate: string, endDate: string): Activity[] {
-  const activities = getActivities()
-  const start = new Date(startDate)
-  const end = new Date(endDate)
+// Create activity update (for tracking changes)
+export async function createActivityUpdate(
+  activityId: string,
+  status: "pending" | "done",
+  remark?: string
+): Promise<ActivityUpdate | null> {
+  try {
+    const response = await axiosInstance.post('/activity-updates', {
+      activity_id: activityId,
+      status,
+      remark: remark || '',
+    })
+    return response.data
+  } catch (error) {
+    console.error('Error creating activity update:', error)
+    return null
+  }
+}
 
-  return activities.filter((a) => {
-    const actDate = new Date(a.createdAt)
-    return actDate >= start && actDate <= end
-  })
+// Fetch activities for reporting (date range)
+export async function fetchActivitiesByDateRange(startDate: string, endDate: string): Promise<Activity[]> {
+  try {
+    const response = await axiosInstance.get(`/activities?start_date=${startDate}&end_date=${endDate}`)
+    return response.data
+  } catch (error) {
+    console.error('Error fetching activities by date range:', error)
+    return []
+  }
+}
+
+// Fetch all activities with detailed information (including creator and updates)
+export async function fetchActivitiesDetailed(): Promise<Activity[]> {
+  try {
+    const response = await axiosInstance.get('/activities?include=creator,updates')
+    return response.data
+  } catch (error) {
+    console.error('Error fetching detailed activities:', error)
+    return []
+  }
 }

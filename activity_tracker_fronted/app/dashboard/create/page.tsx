@@ -1,3 +1,4 @@
+// app/dashboard/create/page.tsx
 "use client"
 
 import type React from "react"
@@ -10,7 +11,7 @@ import { Header } from "@/components/header"
 import { ProtectedRoute } from "@/components/protected-route"
 import { useAuth } from "@/lib/auth-context"
 import { createActivity } from "@/lib/activity-store"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Loader2, Plus } from "lucide-react"
 import Link from "next/link"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
@@ -18,15 +19,16 @@ export default function CreateActivity() {
   const { user } = useAuth()
   const router = useRouter()
   const [formData, setFormData] = useState({
-    activityType: "", // added activity type selection
+    activityType: "",
     title: "",
     description: "",
-    smsCount: "", // added SMS-specific fields
+    smsCount: "",
     smsFromLogs: "",
     comparison: "",
     remark: "",
   })
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -39,7 +41,12 @@ export default function CreateActivity() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user || !formData.activityType) return
+    setError("")
+
+    if (!user || !formData.activityType) {
+      setError("Please select an activity type")
+      return
+    }
 
     setIsLoading(true)
     try {
@@ -51,8 +58,16 @@ export default function CreateActivity() {
       const titleText =
         formData.activityType === "sms-count" ? `Daily SMS count in comparison to SMS count from logs` : formData.title
 
-      createActivity(titleText, fullDescription, user.id, user.name, user.department)
-      router.push("/dashboard")
+      const result = await createActivity(titleText, fullDescription, formData.remark)
+
+      if (result) {
+        router.push("/dashboard")
+      } else {
+        setError("Failed to create activity. Please try again.")
+      }
+    } catch (err) {
+      console.error("Error creating activity:", err)
+      setError("Failed to create activity. Please try again.")
     } finally {
       setIsLoading(false)
     }
@@ -65,25 +80,34 @@ export default function CreateActivity() {
 
         <main className="mx-auto max-w-2xl px-6 py-8 lg:px-8">
           <Link href="/dashboard">
-            <Button variant="ghost" className="mb-6 gap-2">
+            <Button variant="ghost" className="mb-6 gap-2 hover-lift">
               <ArrowLeft className="h-4 w-4" />
-              Back to Activities
+              Back to Dashboard
             </Button>
           </Link>
 
-          <Card className="border-border/50">
+          <Card className="border-border/30">
             <CardHeader className="space-y-2">
-              <CardTitle className="text-2xl">Create New Activity</CardTitle>
-              <CardDescription>Log daily support team activities and metrics</CardDescription>
+              <div className="flex items-center gap-3">
+                <div className="rounded-full p-3 bg-primary/10">
+                  <Plus className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-2xl">Create New Activity</CardTitle>
+                  <CardDescription>Log daily support team activities and metrics</CardDescription>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
+                {error && <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
+
                 <div>
                   <label htmlFor="activityType" className="block text-sm font-medium text-foreground mb-2">
                     Activity Type
                   </label>
                   <Select value={formData.activityType} onValueChange={handleActivityTypeChange}>
-                    <SelectTrigger className="border-border/50">
+                    <SelectTrigger className="border-border/30">
                       <SelectValue placeholder="Select activity type..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -112,7 +136,7 @@ export default function CreateActivity() {
                           placeholder="e.g., 1,250"
                           required
                           disabled={isLoading}
-                          className="border-border/50"
+                          className="border-border/30"
                         />
                       </div>
                       <div>
@@ -128,7 +152,7 @@ export default function CreateActivity() {
                           placeholder="e.g., 1,248"
                           required
                           disabled={isLoading}
-                          className="border-border/50"
+                          className="border-border/30"
                         />
                       </div>
                     </div>
@@ -144,7 +168,7 @@ export default function CreateActivity() {
                         placeholder="Note any discrepancies and reasons..."
                         rows={3}
                         disabled={isLoading}
-                        className="w-full rounded-lg border border-border/50 bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                        className="w-full rounded-lg border border-border/30 bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
                       />
                     </div>
                   </>
@@ -164,7 +188,7 @@ export default function CreateActivity() {
                         placeholder="Enter activity title"
                         required
                         disabled={isLoading}
-                        className="border-border/50"
+                        className="border-border/30"
                       />
                     </div>
                     <div>
@@ -179,7 +203,7 @@ export default function CreateActivity() {
                         placeholder="Describe the activity..."
                         rows={4}
                         disabled={isLoading}
-                        className="w-full rounded-lg border border-border/50 bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                        className="w-full rounded-lg border border-border/30 bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
                       />
                     </div>
                   </>
@@ -197,16 +221,28 @@ export default function CreateActivity() {
                     placeholder="Add any remarks or notes..."
                     rows={3}
                     disabled={isLoading}
-                    className="w-full rounded-lg border border-border/50 bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                    className="w-full rounded-lg border border-border/30 bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
                   />
                 </div>
 
                 <div className="flex gap-3 pt-4">
-                  <Button type="submit" size="lg" className="flex-1" disabled={isLoading || !formData.activityType}>
-                    {isLoading ? "Creating..." : "Create Activity"}
+                  <Button
+                    type="submit"
+                    size="lg"
+                    className="flex-1 hover-lift"
+                    disabled={isLoading || !formData.activityType}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      "Create Activity"
+                    )}
                   </Button>
                   <Link href="/dashboard" className="flex-1">
-                    <Button type="button" variant="outline" size="lg" className="w-full bg-transparent">
+                    <Button type="button" variant="outline" size="lg" className="w-full bg-transparent hover-lift">
                       Cancel
                     </Button>
                   </Link>

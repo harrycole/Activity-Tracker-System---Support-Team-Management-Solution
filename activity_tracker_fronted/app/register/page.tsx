@@ -32,7 +32,8 @@ export default function RegisterPage() {
     setIsLoading(true)
 
     try {
-      await register(email, password, name, department)
+      // Note the parameter order: name, email, password, department
+      await register(name, email, password, department)
       router.push("/dashboard")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed")
@@ -133,4 +134,3 @@ export default function RegisterPage() {
     </div>
   )
 }
-

@@ -2,28 +2,26 @@
 
 import type React from "react"
 import { createContext, useContext, useState, useEffect } from "react"
+import axiosInstance from "@/lib/axiosInstance" // Import axiosInstance
 
 interface User {
-  user_id: string  // Changed from 'id' to 'user_id' to match Laravel
+  user_id: string 
   email: string
   name: string
-  department?: string  // Optional since your Laravel doesn't have department yet
+  department?: string  
   bio?: string
-  created_at: string  // Changed from 'createdAt' to match Laravel
+  created_at: string 
 }
 
 interface AuthContextType {
   user: User | null
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
-  register: (email: string, password: string, name: string, department: string) => Promise<void>
-  logout: () => void
+  register: (name: string, email: string, password: string, department: string) => Promise<void>
+  logout: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
-
-// Backend API base URL - update this to match your Laravel server
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -41,125 +39,99 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     setIsLoading(true)
     try {
-      // First, get CSRF cookie from Sanctum
-      await fetch(`${API_URL}/sanctum/csrf-cookie`, {
-        method: 'GET',
-        credentials: 'include',
+      // Use axiosInstance instead of fetch
+      const response = await axiosInstance.post('/login', {
+        email,
+        password,
       })
 
-      // Then, login
-      const response = await fetch(`${API_URL}/api/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        credentials: 'include', // Important for cookies
-        body: JSON.stringify({
-          email,
-          password,
-        }),
-      })
+      const { token, user: userData } = response.data
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.message || "Login failed")
-      }
-
-      // Get user info
-      const userResponse = await fetch(`${API_URL}/api/user`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        },
-        credentials: 'include',
-      })
-
-      if (!userResponse.ok) {
-        throw new Error("Failed to fetch user data")
-      }
-
-      const userData = await userResponse.json()
+      // Store token
+      localStorage.setItem('auth_token', token)
       
-      // Store user in state and localStorage
+      // Format and store user
       const formattedUser: User = {
         user_id: userData.user_id,
         email: userData.email,
         name: userData.name,
-        department: userData.department || '', // Your backend might not have department yet
+        department: userData.department || '',
         created_at: userData.created_at,
       }
 
       setUser(formattedUser)
       localStorage.setItem("user", JSON.stringify(formattedUser))
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error)
-      throw error
+      // Extract error message from Laravel response
+      const errorMessage = error.response?.data?.message || 
+      error.response?.data?.error || 'Login failed. Please check your credentials.'
+      throw new Error(errorMessage)
     } finally {
       setIsLoading(false)
     }
   }
 
-  const register = async (email: string, password: string, name: string, department: string) => {
+  const register = async (name: string, email: string, password: string, department: string) => {
     setIsLoading(true)
     try {
-      // First, get CSRF cookie from Sanctum
-      await fetch(`${API_URL}/sanctum/csrf-cookie`, {
-        method: 'GET',
-        credentials: 'include',
+      // Use axiosInstance for registration
+      const response = await axiosInstance.post('/register', {
+        name,
+        email,
+        password,
+        password_confirmation: password,
+        department,
       })
 
-      // Send registration request
-      const response = await fetch(`${API_URL}/api/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          name,
-          email,
-          password,
-          password_confirmation: password, // Required by Laravel validation
-          department, // Your backend doesn't have this field yet - see note below
-        }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.message || data.errors?.[0] || "Registration failed")
-      }
-
-      // Auto-login after registration
+      // Auto-login after successful registration
       //await login(email, password)
-
-    } catch (error) {
+      
+    } catch (error: any) {
       console.error('Registration error:', error)
-      throw error
+      
+      // Extract error messages from Laravel validation
+      let errorMessage = 'Registration failed'
+      
+      if (error.response?.data?.errors) {
+        // Laravel validation errors object
+        const errors = error.response.data.errors
+        // Get first error message
+        const firstErrorKey = Object.keys(errors)[0]
+        errorMessage = errors[firstErrorKey][0]
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message
+      }
+      
+      throw new Error(errorMessage)
     } finally {
       setIsLoading(false)
     }
   }
 
   const logout = async () => {
+    setIsLoading(true)
     try {
-      await fetch(`${API_URL}/api/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      })
+      // Use axiosInstance for logout
+      await axiosInstance.post('/logout')
     } catch (error) {
       console.error('Logout error:', error)
+      // Still clear local state even if API call fails
     } finally {
+      // Clear all auth data
       setUser(null)
       localStorage.removeItem("user")
+      localStorage.removeItem("auth_token")
+      setIsLoading(false)
     }
   }
 
-  return <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>{children}</AuthContext.Provider>
+  return (
+    <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 export function useAuth() {

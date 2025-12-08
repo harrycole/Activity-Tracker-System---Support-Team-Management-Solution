@@ -1,13 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Header } from "@/components/header"
 import { Input } from "@/components/ui/input"
-import { Calendar } from "lucide-react"
+import { Calendar, Loader2 } from "lucide-react"
 import { ProtectedRoute } from "@/components/protected-route"
-import { getActivitiesByDateRange } from "@/lib/activity-store"
+import { fetchActivities, type Activity } from "@/lib/activity-store"
 
 interface Report {
   date: string
@@ -24,33 +24,70 @@ export default function Reporting() {
   const [endDate, setEndDate] = useState(new Date().toISOString().split("T")[0])
   const [reportData, setReportData] = useState<Report[]>([])
   const [generated, setGenerated] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [allActivities, setAllActivities] = useState<Activity[]>([])
 
-  const handleGenerateReport = () => {
-    const activities = getActivitiesByDateRange(startDate, endDate)
+  // Load all activities on mount
+  useEffect(() => {
+    loadAllActivities()
+  }, [])
 
-    // Group activities by date
-    const grouped = new Map<string, typeof activities>()
-    activities.forEach((activity) => {
-      const date = activity.createdAt.split("T")[0]
-      if (!grouped.has(date)) {
-        grouped.set(date, [])
+  const loadAllActivities = async () => {
+    setLoading(true)
+    try {
+      const data = await fetchActivities()
+      setAllActivities(data)
+    } catch (error) {
+      console.error('Error loading activities:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleGenerateReport = async () => {
+    setLoading(true)
+    try {
+      // If we don't have all activities loaded yet, fetch them
+      let activitiesToUse = allActivities
+      if (allActivities.length === 0) {
+        activitiesToUse = await fetchActivities()
+        setAllActivities(activitiesToUse)
       }
-      grouped.get(date)!.push(activity)
-    })
 
-    // Generate report
-    const report: Report[] = Array.from(grouped.entries())
-      .map(([date, acts]) => ({
-        date,
-        totalActivities: acts.length,
-        completed: acts.filter((a) => a.status === "done").length,
-        pending: acts.filter((a) => a.status === "pending").length,
-        completionRate: Math.round((acts.filter((a) => a.status === "done").length / acts.length) * 100),
-      }))
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      // Filter activities by date range
+      const filteredActivities = activitiesToUse.filter(activity => {
+        const activityDate = new Date(activity.created_at).toISOString().split('T')[0]
+        return activityDate >= startDate && activityDate <= endDate
+      })
 
-    setReportData(report)
-    setGenerated(true)
+      // Group activities by date
+      const grouped = new Map<string, Activity[]>()
+      filteredActivities.forEach((activity) => {
+        const date = activity.created_at.split("T")[0]
+        if (!grouped.has(date)) {
+          grouped.set(date, [])
+        }
+        grouped.get(date)!.push(activity)
+      })
+
+      // Generate report
+      const report: Report[] = Array.from(grouped.entries())
+        .map(([date, acts]) => ({
+          date,
+          totalActivities: acts.length,
+          completed: acts.filter((a) => a.status === "done").length,
+          pending: acts.filter((a) => a.status === "pending").length,
+          completionRate: acts.length > 0 ? Math.round((acts.filter((a) => a.status === "done").length / acts.length) * 100) : 0,
+        }))
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+      setReportData(report)
+      setGenerated(true)
+    } catch (error) {
+      console.error('Error generating report:', error)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const totalActivities = reportData.reduce((sum, r) => sum + r.totalActivities, 0)
@@ -85,6 +122,7 @@ export default function Reporting() {
                       value={startDate}
                       onChange={(e) => setStartDate(e.target.value)}
                       className="border-border/50"
+                      disabled={loading}
                     />
                   </div>
                 </div>
@@ -97,17 +135,36 @@ export default function Reporting() {
                       value={endDate}
                       onChange={(e) => setEndDate(e.target.value)}
                       className="border-border/50"
+                      disabled={loading}
                     />
                   </div>
                 </div>
-                <Button onClick={handleGenerateReport} className="w-full sm:w-auto">
-                  Generate Report
+                <Button 
+                  onClick={handleGenerateReport} 
+                  className="w-full sm:w-auto"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    "Generate Report"
+                  )}
                 </Button>
               </div>
             </CardContent>
           </Card>
 
-          {generated && reportData.length > 0 && (
+          {loading && !generated ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center gap-4">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-muted-foreground">Loading activities...</p>
+              </div>
+            </div>
+          ) : generated && reportData.length > 0 ? (
             <>
               {/* Summary Statistics */}
               <div className="mb-8 grid gap-6 md:grid-cols-4">
@@ -206,15 +263,13 @@ export default function Reporting() {
                 </CardContent>
               </Card>
             </>
-          )}
-
-          {generated && reportData.length === 0 && (
+          ) : generated && reportData.length === 0 ? (
             <Card className="border-border/50">
               <CardContent className="flex items-center justify-center py-12">
                 <p className="text-muted-foreground">No activities found for the selected date range</p>
               </CardContent>
             </Card>
-          )}
+          ) : null}
         </main>
       </div>
     </ProtectedRoute>

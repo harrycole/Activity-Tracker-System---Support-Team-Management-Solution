@@ -39,7 +39,7 @@ export default function ProfilePage() {
                 <div className="flex-1 text-center sm:text-left">
                   <h1 className="text-3xl font-bold text-foreground">{user.name}</h1>
                   <p className="mt-1 text-sm text-muted-foreground">{user.department}</p>
-                  <p className="mt-4 text-sm text-foreground">User ID: {user.id}</p>
+                  <p className="mt-4 text-sm text-foreground">User ID: {user.user_id}</p>
                 </div>
               </div>
             </CardContent>
@@ -73,7 +73,7 @@ export default function ProfilePage() {
                     <Calendar className="mt-1 h-4 w-4 text-muted-foreground" />
                     <div>
                       <p className="text-xs text-muted-foreground">Member Since</p>
-                      <p className="mt-1 text-sm text-foreground">{new Date(user.createdAt).toLocaleDateString()}</p>
+                      <p className="mt-1 text-sm text-foreground">{new Date(user.created_at).toLocaleDateString()}</p>
                     </div>
                   </div>
                 </div>
