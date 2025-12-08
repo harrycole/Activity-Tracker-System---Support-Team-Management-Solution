@@ -26,8 +26,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/activities', [ActivityController::class, 'index']);
     Route::get('/activities/{id}', [ActivityController::class, 'show']);
     Route::put('/activities/{id}', [ActivityController::class, 'update']);
-    Route::get('/activities/daily', [ActivityController::class, 'dailyActivities']);
-    Route::get('/activities/hourly', [ActivityController::class, 'hourlyActivities']);
+    Route::post('/activities/daily', [ActivityController::class, 'dailyActivities']);
+    Route::post('/activities/hourly', [ActivityController::class, 'hourlyActivities']);
 
     // Activity Updates
     Route::post('/activity-updates', [ActivityUpdateController::class, 'store']);

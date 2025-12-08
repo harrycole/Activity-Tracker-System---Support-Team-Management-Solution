@@ -89,12 +89,16 @@ class ActivityController extends Controller
         $date = Carbon::parse($request->date)->format('Y-m-d');
 
         $activities = Activity::with(['updates' => function($q) use ($date) {
-            $q->whereDate('created_at', $date);
-        }, 'creator'])
-        ->get();
+                $q->whereDate('created_at', $date)
+                  ->orderBy('created_at', 'asc'); // updates chronological
+            }, 'creator'])
+            ->whereDate('created_at', $date)   // only activities from that date
+            ->orderBy('created_at', 'desc')    // newest first
+            ->get();
 
         return response()->json($activities);
     }
+
 
     // Hourly activities with updates
     public function hourlyActivities(Request $request)
@@ -106,12 +110,13 @@ class ActivityController extends Controller
         $date = Carbon::parse($request->date)->format('Y-m-d');
 
         $updates = ActivityUpdate::with('activity', 'user')
-            ->whereDate('created_at', $date)
-            ->orderBy('created_at', 'asc')
-            ->get()
-            ->groupBy(function($item) {
-                return Carbon::parse($item->created_at)->format('H'); // Group by hour
-            });
+        ->whereHas('activity', function($q) use ($date) {
+            $q->whereDate('created_at', $date);
+        })
+        ->whereDate('created_at', $date)
+        ->orderBy('created_at', 'asc')
+        ->get()
+        ->groupBy(fn($item) => Carbon::parse($item->created_at)->format('H'));
 
         return response()->json($updates);
     }
