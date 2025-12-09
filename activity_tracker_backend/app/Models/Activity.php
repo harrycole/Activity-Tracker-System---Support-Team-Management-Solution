@@ -9,9 +9,9 @@ class Activity extends Model
 {
     use HasFactory;
 
-    protected $primaryKey = 'activity_id'; // custom primary key
-    public $incrementing = false;          // not auto-increment
-    protected $keyType = 'string';         // string type
+    protected $primaryKey = 'activity_id';
+    public $incrementing = false;
+    protected $keyType = 'string';
 
     protected $fillable = [
         'activity_id',
@@ -21,7 +21,6 @@ class Activity extends Model
         'status',
     ];
 
-    // Automatically generate activity_id before creating
     protected static function booted()
     {
         static::creating(function ($activity) {
@@ -35,13 +34,11 @@ class Activity extends Model
         });
     }
 
-    // Relation: Activity has many updates
     public function updates()
     {
         return $this->hasMany(ActivityUpdate::class, 'activity_id', 'activity_id');
     }
 
-    // Relation: Activity created by a user
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by', 'user_id');

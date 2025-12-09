@@ -11,16 +11,23 @@ return new class extends Migration
         Schema::create('activity_updates', function (Blueprint $table) {
             $table->string('update_id')->primary();  // custom string ID
 
-            // activity link (string)
+            // link to parent activity
             $table->string('activity_id');
-            $table->foreign('activity_id')->references('activity_id')->on('activities')->cascadeOnDelete();
+            $table->foreign('activity_id')
+                  ->references('activity_id')
+                  ->on('activities')
+                  ->cascadeOnDelete();
 
-            // user performing update (string)
+            // user performing update
             $table->string('updated_by');
-            $table->foreign('updated_by')->references('user_id')->on('users')->cascadeOnDelete();
+            $table->foreign('updated_by')
+                  ->references('user_id')
+                  ->on('users')
+                  ->cascadeOnDelete();
 
             $table->enum('status', ['done', 'pending']);
-            $table->text('remark')->nullable();
+            $table->text('remark')->nullable();   // optional comment
+            $table->text('progress')->nullable(); // progress info / subtask completion
 
             $table->timestamps();
         });

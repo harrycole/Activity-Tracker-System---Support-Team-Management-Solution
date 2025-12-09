@@ -9,6 +9,7 @@ export interface Activity {
   created_by: string  // user_id
   created_at: string
   updated_at: string
+  
   // Your backend returns 'creator' not 'user'
   creator?: {
     user_id: string
@@ -19,7 +20,13 @@ export interface Activity {
     created_at: string
     updated_at: string
   }
-  updates?: ActivityUpdate[]
+  updates?: Array<{
+    update_id: string
+    progress: string
+    status: string
+    remark: string | null
+    created_at: string
+  }>
 }
 
 export interface ActivityUpdate {
@@ -125,12 +132,17 @@ export async function updateActivityStatus(
 // Fetch daily activities
 export async function fetchDailyActivities(date?: string): Promise<Activity[]> {
   try {
-    const query = date ? `?date=${date}` : ''
-    const response = await axiosInstance.get(`/activities/daily${query}`)
-    return response.data
+    // Use current date if no date provided
+    const targetDate = date || new Date().toISOString().split('T')[0];
+    
+    const response = await axiosInstance.post('/activities-daily', {
+      date: targetDate
+    });
+    
+    return response.data;
   } catch (error) {
-    console.error('Error fetching daily activities:', error)
-    return []
+    console.error('Error fetching daily activities:', error);
+    return [];
   }
 }
 

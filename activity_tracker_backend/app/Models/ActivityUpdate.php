@@ -14,12 +14,16 @@ class ActivityUpdate extends Model
     protected $fillable = [
         'update_id',
         'activity_id',
-        'updated_by',  // match migration
+        'updated_by',
         'status',
         'remark',
+        'progress',
     ];
 
-    // Generate update_id automatically
+    protected $casts = [
+        'progress' => 'array',
+    ];
+
     protected static function boot()
     {
         parent::boot();
@@ -31,7 +35,6 @@ class ActivityUpdate extends Model
         });
     }
 
-    // Relationships
     public function activity()
     {
         return $this->belongsTo(Activity::class, 'activity_id', 'activity_id');
@@ -39,6 +42,6 @@ class ActivityUpdate extends Model
 
     public function user()
     {
-        return $this->belongsTo(User::class, 'updated_by', 'user_id'); // match migration
+        return $this->belongsTo(User::class, 'updated_by', 'user_id');
     }
 }

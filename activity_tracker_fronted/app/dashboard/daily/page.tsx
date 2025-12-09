@@ -5,11 +5,11 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Header } from "@/components/header"
 import { Badge } from "@/components/ui/badge"
-import { ChevronLeft, ChevronRight, Loader2, User, Building, ArrowLeft, TrendingUp } from "lucide-react"
+import { ChevronLeft, ChevronRight, Loader2, User, Building, ArrowLeft, TrendingUp, Calendar, Clock, CheckCircle2, AlertCircle } from "lucide-react"
 import { ProtectedRoute } from "@/components/protected-route"
 import { fetchDailyActivities, type Activity } from "@/lib/activity-store"
 import Link from "next/link"
-import { Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts"
+import { Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts"
 
 export default function DailyView() {
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -45,13 +45,64 @@ export default function DailyView() {
     setCurrentDate(newDate)
   }
 
+  // Calculate statistics
   const completedCount = activities.filter((a) => a.status === "done").length
   const pendingCount = activities.filter((a) => a.status === "pending").length
   const completionRate = activities.length > 0 ? Math.round((completedCount / activities.length) * 100) : 0
 
-  const pieData = [
-    { name: "Completed", value: completedCount, fill: "var(--color-chart-1)" },
-    { name: "Pending", value: pendingCount, fill: "var(--color-chart-2)" },
+  // Get activities with updates
+  const activitiesWithUpdates = activities.filter(a => a.updates && a.updates.length > 0).length
+  const activitiesWithoutUpdates = activities.length - activitiesWithUpdates
+
+  // Get unique departments
+  const uniqueDepartments = Array.from(new Set(
+    activities
+      .map(a => a.creator?.department)
+      .filter(dept => dept)
+  ))
+
+  // Format time for display
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    })
+  }
+
+  // Get activities by time period (morning, afternoon, evening)
+  const getActivitiesByTimePeriod = () => {
+    const morning = activities.filter(a => {
+      const hour = new Date(a.created_at).getHours()
+      return hour >= 6 && hour < 12
+    }).length
+    
+    const afternoon = activities.filter(a => {
+      const hour = new Date(a.created_at).getHours()
+      return hour >= 12 && hour < 18
+    }).length
+    
+    const evening = activities.filter(a => {
+      const hour = new Date(a.created_at).getHours()
+      return hour >= 18 || hour < 6
+    }).length
+    
+    return { morning, afternoon, evening }
+  }
+
+  const timePeriodData = getActivitiesByTimePeriod()
+
+  // Pie chart data
+  const statusPieData = [
+    { name: "Completed", value: completedCount, color: "#10b981" },
+    { name: "Pending", value: pendingCount, color: "#f59e0b" },
+  ]
+
+  const timePieData = [
+    { name: "Morning", value: timePeriodData.morning, color: "#3b82f6" },
+    { name: "Afternoon", value: timePeriodData.afternoon, color: "#8b5cf6" },
+    { name: "Evening", value: timePeriodData.evening, color: "#ef4444" },
   ]
 
   const formatDate = (date: Date) => {
@@ -84,7 +135,7 @@ export default function DailyView() {
       <div className="min-h-screen bg-background">
         <Header />
 
-        <main className="mx-auto max-w-6xl px-6 py-8 lg:px-8">
+        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <Link href="/dashboard">
             <Button variant="ghost" className="mb-6 gap-2 hover-lift">
               <ArrowLeft className="h-4 w-4" />
@@ -93,10 +144,13 @@ export default function DailyView() {
           </Link>
 
           <div className="mb-8">
-            <h1 className="text-balance text-4xl font-bold tracking-tight text-foreground">Daily View</h1>
-            <p className="mt-2 text-lg text-muted-foreground">Activities and metrics for this day</p>
+            <h1 className="text-balance text-4xl font-bold tracking-tight text-foreground">Daily Activity Report</h1>
+            <p className="mt-2 text-lg text-muted-foreground">
+              Activities and metrics for {formatDate(currentDate)}
+            </p>
           </div>
 
+          {/* Date Navigation */}
           <Card className="border-border/30 mb-8">
             <CardContent className="flex items-center justify-between p-6">
               <Button
@@ -110,8 +164,22 @@ export default function DailyView() {
               </Button>
 
               <div className="text-center flex-1">
-                <p className="text-2xl font-bold text-foreground">{formatDate(currentDate)}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{activities.length} activities logged</p>
+                <div className="flex items-center justify-center gap-3 mb-2">
+                  <Calendar className="h-5 w-5 text-primary" />
+                  <p className="text-2xl font-bold text-foreground">{formatDate(currentDate)}</p>
+                </div>
+                <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    {completedCount} completed
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <AlertCircle className="h-4 w-4 text-amber-500" />
+                    {pendingCount} pending
+                  </span>
+                  <span>•</span>
+                  <span>{activities.length} total activities</span>
+                </div>
               </div>
 
               <Button
@@ -126,13 +194,15 @@ export default function DailyView() {
             </CardContent>
           </Card>
 
-          <div className="mb-8 grid gap-4 md:grid-cols-3">
+          {/* Statistics Cards */}
+          <div className="mb-8 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card className="border-border/30 bg-gradient-to-br from-card to-card/50">
               <CardContent className="pt-6">
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Total Activities</p>
                     <p className="mt-2 text-3xl font-bold text-foreground">{activities.length}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{uniqueDepartments.length} departments</p>
                   </div>
                   <div className="rounded-full p-3 bg-primary/10 hover-lift">
                     <TrendingUp className="h-6 w-6 text-primary" />
@@ -146,10 +216,13 @@ export default function DailyView() {
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Completed</p>
-                    <p className="mt-2 text-3xl font-bold text-primary">{completedCount}</p>
+                    <p className="mt-2 text-3xl font-bold text-green-600">{completedCount}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {completionRate}% completion rate
+                    </p>
                   </div>
-                  <div className="rounded-full p-3 bg-primary/10 hover-lift">
-                    <span className="text-lg font-bold text-primary">✓</span>
+                  <div className="rounded-full p-3 bg-green-500/10 hover-lift">
+                    <CheckCircle2 className="h-6 w-6 text-green-500" />
                   </div>
                 </div>
               </CardContent>
@@ -159,21 +232,42 @@ export default function DailyView() {
               <CardContent className="pt-6">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Completion Rate</p>
-                    <p className="mt-2 text-3xl font-bold text-primary">{completionRate}%</p>
+                    <p className="text-sm font-medium text-muted-foreground">Pending</p>
+                    <p className="mt-2 text-3xl font-bold text-amber-500">{pendingCount}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {activitiesWithUpdates} with updates
+                    </p>
                   </div>
-                  <div className="rounded-full p-3 bg-primary/10 hover-lift">
-                    <span className="text-lg font-bold text-primary">{completionRate}</span>
+                  <div className="rounded-full p-3 bg-amber-500/10 hover-lift">
+                    <AlertCircle className="h-6 w-6 text-amber-500" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/30 bg-gradient-to-br from-card to-card/50">
+              <CardContent className="pt-6">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Departments</p>
+                    <p className="mt-2 text-3xl font-bold text-blue-500">{uniqueDepartments.length}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {activitiesWithoutUpdates} without updates
+                    </p>
+                  </div>
+                  <div className="rounded-full p-3 bg-blue-500/10 hover-lift">
+                    <Building className="h-6 w-6 text-blue-500" />
                   </div>
                 </div>
               </CardContent>
             </Card>
           </div>
 
+          {/* Charts Section */}
           <div className="mb-8 grid gap-6 lg:grid-cols-2">
             <Card className="border-border/30">
               <CardHeader>
-                <CardTitle>Status Distribution</CardTitle>
+                <CardTitle>Activity Status</CardTitle>
                 <CardDescription>Completed vs pending activities</CardDescription>
               </CardHeader>
               <CardContent>
@@ -181,22 +275,28 @@ export default function DailyView() {
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={pieData}
+                        data={statusPieData}
                         cx="50%"
                         cy="50%"
                         labelLine={false}
-                        label={({ name, value }) => `${name}: ${value}`}
+                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                         outerRadius={80}
                         fill="#8884d8"
                         dataKey="value"
                       >
-                        {pieData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.fill} />
+                        {statusPieData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
                       <Tooltip
-                        contentStyle={{ backgroundColor: "var(--color-card)", border: "1px solid var(--color-border)" }}
+                        formatter={(value) => [`${value} activities`, 'Count']}
+                        contentStyle={{ 
+                          backgroundColor: "var(--color-card)", 
+                          border: "1px solid var(--color-border)",
+                          borderRadius: "8px"
+                        }}
                       />
+                      <Legend />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -205,110 +305,141 @@ export default function DailyView() {
 
             <Card className="border-border/30">
               <CardHeader>
-                <CardTitle>Timeline Overview</CardTitle>
-                <CardDescription>Activity distribution by hour</CardDescription>
+                <CardTitle>Activity Timeline</CardTitle>
+                <CardDescription>Distribution by time of day</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-foreground">Completion</span>
-                      <span className="text-sm font-bold text-primary">{completionRate}%</span>
-                    </div>
-                    <div className="h-3 w-full rounded-full bg-border/30">
-                      <div
-                        className="h-full rounded-full bg-primary transition-all"
-                        style={{ width: `${completionRate}%` }}
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={timePieData}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ name, value }) => `${name}: ${value}`}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="value"
+                      >
+                        {timePieData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value) => [`${value} activities`, 'Count']}
+                        contentStyle={{ 
+                          backgroundColor: "var(--color-card)", 
+                          border: "1px solid var(--color-border)",
+                          borderRadius: "8px"
+                        }}
                       />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-foreground">Pending</span>
-                      <span className="text-sm font-bold text-accent">{100 - completionRate}%</span>
-                    </div>
-                    <div className="h-3 w-full rounded-full bg-border/30">
-                      <div
-                        className="h-full rounded-full bg-accent transition-all"
-                        style={{ width: `${100 - completionRate}%` }}
-                      />
-                    </div>
-                  </div>
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          <Card className="border-border/30">
+          {/* Activity Timeline */}
+          <Card className="border-border/30 mb-8">
             <CardHeader>
-              <CardTitle>Activity Timeline</CardTitle>
-              <CardDescription>All activities in chronological order</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Activity Timeline</CardTitle>
+                  <CardDescription>All activities in chronological order</CardDescription>
+                </div>
+                <Badge variant="outline" className="ml-2">
+                  {activities.length} activities
+                </Badge>
+              </div>
             </CardHeader>
             <CardContent>
               {activities.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">No activities for this day</p>
+                <div className="text-center py-12">
+                  <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground text-lg">No activities for this day</p>
+                  <p className="text-sm text-muted-foreground mt-2">Try selecting a different date</p>
+                </div>
               ) : (
                 <div className="space-y-4">
                   {activities.map((activity, index) => (
-                    <div key={activity.activity_id} className="relative pb-4">
+                    <div key={activity.activity_id} className="relative pb-6 last:pb-0">
                       {index !== activities.length - 1 && (
-                        <div className="absolute left-4 top-10 h-6 w-0.5 bg-border/30" />
+                        <div className="absolute left-6 top-12 bottom-0 w-0.5 bg-border/30" />
                       )}
 
                       <div className="flex gap-4">
-                        <div className="flex flex-col items-center">
+                        <div className="flex flex-col items-center pt-1">
                           <div
-                            className={`h-8 w-8 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                            className={`h-10 w-10 rounded-full border-4 flex items-center justify-center shrink-0 ${
                               activity.status === "done"
-                                ? "bg-primary border-primary"
-                                : "border-border/50 bg-background"
+                                ? "bg-green-100 border-green-300"
+                                : "bg-amber-100 border-amber-300"
                             }`}
                           >
-                            {activity.status === "done" && (
-                              <svg
-                                className="h-4 w-4 text-primary-foreground"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                              </svg>
+                            {activity.status === "done" ? (
+                              <CheckCircle2 className="h-5 w-5 text-green-600" />
+                            ) : (
+                              <Clock className="h-5 w-5 text-amber-600" />
                             )}
                           </div>
+                          <span className="text-xs text-muted-foreground mt-2">
+                            {formatTime(activity.created_at)}
+                          </span>
                         </div>
 
-                        <Link href={`/dashboard/activity/${activity.activity_id}`} className="flex-1 min-w-0">
-                          <div className="flex-1 p-3 rounded-lg border border-border/20 bg-card/50 hover:border-primary/30 hover:bg-card transition-all cursor-pointer">
-                            <div className="flex items-start justify-between gap-2">
+                        <Link 
+                          href={`/dashboard/activity/${activity.activity_id}`} 
+                          className="flex-1 min-w-0 group"
+                        >
+                          <div className="p-4 rounded-lg border border-border/20 bg-card/50 group-hover:border-primary/30 group-hover:bg-card transition-all cursor-pointer">
+                            <div className="flex items-start justify-between gap-3">
                               <div className="flex-1 min-w-0">
-                                <p className="font-semibold text-foreground truncate">{activity.title}</p>
-
-                                <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                                  <User className="h-3 w-3" />
-                                  <span>{activity.creator?.name || "Unknown"}</span>
-                                  <span>•</span>
-                                  <span>{new Date(activity.created_at).toLocaleTimeString()}</span>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <p className="font-semibold text-foreground truncate">
+                                    {activity.title}
+                                  </p>
+                                  <Badge
+                                    variant={activity.status === "done" ? "default" : "secondary"}
+                                    className="shrink-0"
+                                  >
+                                    {activity.status === "done" ? "Done" : "Pending"}
+                                  </Badge>
                                 </div>
 
-                                {activity.creator?.department && (
-                                  <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                                    <Building className="h-3 w-3" />
-                                    <span>{activity.creator.department}</span>
+                                <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
+                                  <div className="flex items-center gap-1">
+                                    <User className="h-3.5 w-3.5" />
+                                    <span>{activity.creator?.name || "Unknown"}</span>
                                   </div>
-                                )}
+                                  {activity.creator?.department && (
+                                    <>
+                                      <div className="h-1 w-1 rounded-full bg-border" />
+                                      <div className="flex items-center gap-1">
+                                        <Building className="h-3.5 w-3.5" />
+                                        <span>{activity.creator.department}</span>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
 
                                 {activity.description && (
-                                  <div className="mt-2 text-sm text-foreground line-clamp-2">
+                                  <div className="text-sm text-foreground line-clamp-2 mb-3">
                                     {activity.description}
                                   </div>
                                 )}
+
+                                {activity.updates && activity.updates.length > 0 && (
+                                  <div className="text-xs text-muted-foreground">
+                                    <span className="font-medium">Latest update: </span>
+                                    <span className="italic">
+                                      "{activity.updates[activity.updates.length - 1].remark || "No remark"}"
+                                    </span>
+                                  </div>
+                                )}
                               </div>
-                              <Badge
-                                variant={activity.status === "done" ? "default" : "secondary"}
-                                className="shrink-0"
-                              >
-                                {activity.status === "done" ? "Done" : "Pending"}
-                              </Badge>
                             </div>
                           </div>
                         </Link>
@@ -320,25 +451,80 @@ export default function DailyView() {
             </CardContent>
           </Card>
 
+          {/* Shift Handover Summary - Improved */}
           {activities.length > 0 && (
-            <Card className="mt-8 border-border/30 border-l-4 border-l-primary">
+            <Card className="border-border/30 border-l-4 border-l-primary">
               <CardHeader>
-                <CardTitle className="text-lg">Shift Handover Summary</CardTitle>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg">Shift Handover Summary</CardTitle>
+                    <CardDescription>Key information for the next shift</CardDescription>
+                  </div>
+                  <Badge variant="secondary" className="ml-2">
+                    {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                  </Badge>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div className="p-4 rounded-lg bg-primary/5 border border-primary/10">
-                      <p className="font-semibold text-foreground text-sm mb-2">✓ Completed</p>
-                      <p className="text-lg font-bold text-primary">{completedCount}</p>
-                      <p className="text-xs text-muted-foreground mt-1">Activities done</p>
+                <div className="space-y-6">
+                  <div className="grid md:grid-cols-3 gap-4">
+                    <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                      <div className="flex items-center gap-2 mb-2">
+                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                        <p className="font-semibold text-foreground text-sm">Completed</p>
+                      </div>
+                      <p className="text-2xl font-bold text-green-700 dark:text-green-400">{completedCount}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Ready for handover</p>
                     </div>
-                    <div className="p-4 rounded-lg bg-accent/5 border border-accent/10">
-                      <p className="font-semibold text-foreground text-sm mb-2">→ Pending</p>
-                      <p className="text-lg font-bold text-accent">{pendingCount}</p>
-                      <p className="text-xs text-muted-foreground mt-1">Items for next shift</p>
+                    
+                    <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertCircle className="h-5 w-5 text-amber-600" />
+                        <p className="font-semibold text-foreground text-sm">Pending</p>
+                      </div>
+                      <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">{pendingCount}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Needs follow-up</p>
+                    </div>
+                    
+                    <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Building className="h-5 w-5 text-blue-600" />
+                        <p className="font-semibold text-foreground text-sm">Departments</p>
+                      </div>
+                      <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{uniqueDepartments.length}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Involved teams</p>
                     </div>
                   </div>
+
+                  {pendingCount > 0 && (
+                    <div className="p-4 rounded-lg bg-background border">
+                      <h4 className="font-semibold text-foreground mb-3">Pending Items Requiring Attention:</h4>
+                      <div className="space-y-2">
+                        {activities
+                          .filter(a => a.status === 'pending')
+                          .slice(0, 5) // Show only first 5
+                          .map(activity => (
+                            <div key={activity.activity_id} className="flex items-center justify-between p-2 hover:bg-muted/50 rounded">
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                                <span className="text-sm font-medium">{activity.title}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground">{activity.creator?.department}</span>
+                                <Badge variant="outline" size="sm">
+                                  {activity.updates?.length || 0} updates
+                                </Badge>
+                              </div>
+                            </div>
+                          ))}
+                        {pendingCount > 5 && (
+                          <p className="text-xs text-muted-foreground text-center pt-2">
+                            +{pendingCount - 5} more pending activities
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

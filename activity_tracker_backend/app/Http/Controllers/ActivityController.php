@@ -3,10 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Activity;
+use App\Models\ActivityUpdate;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
-use App\Models\ActivityUpdate;
 
 class ActivityController extends Controller
 {
@@ -23,6 +23,7 @@ class ActivityController extends Controller
             ])->validate();
 
             $user = $request->user();
+
             $created[] = Activity::create([
                 'title' => $validated['title'],
                 'description' => $validated['description'] ?? null,
@@ -33,7 +34,6 @@ class ActivityController extends Controller
 
         return response()->json($created, 201);
     }
-
 
     // Get all activities
     public function index()
@@ -49,7 +49,7 @@ class ActivityController extends Controller
         return response()->json($activity);
     }
 
-    // Update existing activity
+    // Update activity
     public function update(Request $request, $activityId)
     {
         try {
@@ -61,7 +61,21 @@ class ActivityController extends Controller
                 'status' => 'sometimes|in:pending,done',
             ]);
 
+            $oldStatus = $activity->status; // Store old status
+            
             $activity->update($request->only('title', 'description', 'status'));
+
+            // If status changed, create an activity_update record
+            if ($request->has('status') && $activity->status !== $oldStatus) {
+                ActivityUpdate::create([
+                    'update_id' => 'UPD'.rand(10000,99999),
+                    'activity_id' => $activity->activity_id,
+                    'updated_by' => $request->user()->user_id,
+                    'status' => $activity->status,
+                    'remark' => $request->input('remark', 'Status changed via parent update'),
+                    'progress' => $request->input('progress', null),
+                ]);
+            }
 
             return response()->json($activity);
 
@@ -79,45 +93,76 @@ class ActivityController extends Controller
         }
     }
 
-    // Daily activities with updates
-    public function dailyActivities(Request $request)
+    public function weeklyActivities()
     {
-        $request->validate([
-            'date' => 'required|date',
-        ]);
-
-        $date = Carbon::parse($request->date)->format('Y-m-d');
-
-        $activities = Activity::with(['updates' => function($q) use ($date) {
-                $q->whereDate('created_at', $date)
-                  ->orderBy('created_at', 'asc'); // updates chronological
-            }, 'creator'])
-            ->whereDate('created_at', $date)   // only activities from that date
-            ->orderBy('created_at', 'desc')    // newest first
+        // Ensure we are in UTC to match DB timestamps
+        $startOfWeek = Carbon::now('UTC')->startOfWeek(Carbon::MONDAY)->startOfDay();
+        $endOfWeek = Carbon::now('UTC')->endOfWeek(Carbon::SUNDAY)->endOfDay();
+    
+        // Fetch all activities in one query
+        $activities = Activity::with(['updates', 'creator'])
+            ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
+            ->orderBy('created_at', 'asc')
             ->get();
-
-        return response()->json($activities);
+    
+        // Group activities by day (Y-m-d)
+        $weeklyActivities = $activities->groupBy(function($activity) {
+            return Carbon::parse($activity->created_at)->format('Y-m-d');
+        });
+    
+        return response()->json($weeklyActivities);
     }
+    
 
+    // Daily activities with updates
+public function dailyActivities(Request $request)
+{
+    $request->validate([
+        'date' => 'required|date'
+    ]);
 
-    // Hourly activities with updates
-    public function hourlyActivities(Request $request)
-    {
-        $request->validate([
-            'date' => 'required|date',
-        ]);
+    $date = Carbon::parse($request->date)->format('Y-m-d');
 
-        $date = Carbon::parse($request->date)->format('Y-m-d');
-
-        $updates = ActivityUpdate::with('activity', 'user')
-        ->whereHas('activity', function($q) use ($date) {
-            $q->whereDate('created_at', $date);
-        })
+    // Get activities created on the given date, with updates and creator
+    $activities = Activity::with([
+            'updates' => function($q) {
+                $q->orderBy('created_at', 'asc');
+            },
+            'creator' // This will load the user relationship
+        ])
         ->whereDate('created_at', $date)
         ->orderBy('created_at', 'asc')
-        ->get()
-        ->groupBy(fn($item) => Carbon::parse($item->created_at)->format('H'));
+        ->get();
 
-        return response()->json($updates);
-    }
+    // Format activities with nested updates
+    $dailyActivities = $activities->map(function($activity) {
+        return [
+            'activity_id' => $activity->activity_id,
+            'title' => $activity->title ?? null,
+            'description' => $activity->description ?? null,
+            'status' => $activity->status ?? 'pending', // Get status from activity table
+            'created_at' => $activity->created_at,
+            'creator' => $activity->creator ? [
+                'name' => $activity->creator->name ?? 'Unknown',
+                'department' => $activity->creator->department ?? 'General'
+            ] : [
+                'name' => 'Unknown',
+                'department' => 'General'
+            ], // Get creator info from user table
+            'updates' => $activity->updates->map(function($update) {
+                return [
+                    'update_id' => $update->update_id,
+                    'progress' => $update->progress,
+                    'status' => $update->status,
+                    'remark' => $update->remark,
+                    'created_at' => $update->created_at,
+                ];
+            }),
+        ];
+    });
+
+    return response()->json($dailyActivities);
+}
+    
+
 }
