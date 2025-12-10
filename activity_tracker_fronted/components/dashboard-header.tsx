@@ -1,8 +1,10 @@
+// components/dashboard-header.tsx (updated with HistoryProvider)
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Menu, Moon, Sun, User } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { Menu, Moon, Sun, User, ArrowLeft } from "lucide-react"
+import { useRouter, usePathname } from "next/navigation"
+import { useHistory } from "@/components/history-provider"
 
 interface DashboardHeaderProps {
   onMenuClick: () => void
@@ -18,6 +20,22 @@ export function DashboardHeader({
   onToggleDarkMode 
 }: DashboardHeaderProps) {
   const router = useRouter()
+  const pathname = usePathname()
+  const { goBack, canGoBack } = useHistory()
+
+  // Check if we're on the dashboard page
+  const isDashboardPage = pathname === "/dashboard"
+
+  // Handle back navigation using HistoryProvider
+  const handleBackClick = () => {
+    const previousPage = goBack()
+    if (previousPage) {
+      router.push(previousPage)
+    } else {
+      // Fallback to dashboard if no history
+      router.push("/dashboard")
+    }
+  }
 
   const navigateToProfile = () => {
     router.push("/profile")
@@ -49,18 +67,64 @@ export function DashboardHeader({
     <header className="sticky top-0 z-30 w-full border-b border-border/30 bg-white dark:bg-background/98 backdrop-blur-md">
       <div className="px-6 py-4 lg:px-8">
         <div className="flex items-center justify-between">
-          {/* Left side - Just the menu button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="btn-oval lg:hidden hover:bg-primary/10 cursor-pointer"
-            onClick={onMenuClick}
-          >
-            <Menu className="h-6 w-6" />
-          </Button>
+          {/* Left side - Back button for non-dashboard pages */}
+          <div className="flex items-center gap-4">
+            {!isDashboardPage ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="btn-oval hover:bg-primary/10 cursor-pointer"
+                onClick={handleBackClick}
+                disabled={!canGoBack()}
+              >
+                <ArrowLeft className="h-6 w-6" />
+              </Button>
+            ) : (
+              <>
+                {/* Menu button for mobile on dashboard */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="btn-oval lg:hidden hover:bg-primary/10 cursor-pointer"
+                  onClick={onMenuClick}
+                >
+                  <Menu className="h-6 w-6" />
+                </Button>
+                
+                {/* Dashboard title for desktop */}
+                <div className="hidden lg:flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-primary" />
+                  <span className="text-sm font-medium text-muted-foreground">
+                    Dashboard
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
           
-          {/* Empty space on left for desktop */}
-          <div className="flex-1" />
+          {/* Page title for non-dashboard pages */}
+          {!isDashboardPage && (
+            <div className="flex-1 px-4 hidden lg:block">
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-primary" />
+                <span className="text-sm font-medium text-muted-foreground">
+                  {(() => {
+                    // Get readable page title from pathname
+                    const segments = pathname.split('/').filter(segment => segment)
+                    if (segments.length > 1) {
+                      const pageName = segments[segments.length - 1]
+                      // Format: "Activity Details" instead of "id"
+                      if (segments.includes('activity') && segments.length === 3) {
+                        return "Activity Details"
+                      }
+                      return pageName.charAt(0).toUpperCase() + pageName.slice(1)
+                    }
+                    return ""
+                  })()}
+                </span>
+              </div>
+            </div>
+          )}
           
           {/* Right side - User info and dark mode toggle */}
           <div className="flex items-center gap-4">

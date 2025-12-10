@@ -37,8 +37,9 @@ export interface ActivityUpdate {
   updated_by: string  // user_id
   created_at: string
   updated_at: string
-  // Your backend might return this as 'updater' or similar
-  updater?: {
+  progress?: string | null
+  // Your backend returns 'user' for updater
+  user?: {
     user_id: string
     name: string
     department?: string | null
@@ -74,8 +75,10 @@ export async function fetchActivity(id: string): Promise<Activity | null> {
 // Fetch activity updates by activity ID
 export async function fetchActivityUpdates(activityId: string): Promise<ActivityUpdate[]> {
   try {
-    const response = await axiosInstance.get(`/activity-updates?activity_id=${activityId}`)
-    return response.data
+    const response = await axiosInstance.get(`/activity-updates`)
+    // Filter on frontend since the endpoint returns all updates
+    const allUpdates = response.data || []
+    return allUpdates.filter((update: ActivityUpdate) => update.activity_id === activityId)
   } catch (error) {
     console.error('Error fetching activity updates:', error)
     return []
@@ -101,7 +104,7 @@ export async function createActivity(
   }
 }
 
-// Update activity status
+// Update activity status (legacy function)
 export async function updateActivityStatus(
   activityId: string,
   status: "pending" | "done",
@@ -129,6 +132,30 @@ export async function updateActivityStatus(
   }
 }
 
+// NEW: Create activity update via the new endpoint
+export async function createActivityUpdateViaAPI(
+  activityId: string,
+  status: "pending" | "done",
+  remark?: string,
+  progress?: string
+): Promise<ActivityUpdate | null> {
+  try {
+    const response = await axiosInstance.post('/activity-updates', {
+      activity_id: activityId,
+      status,
+      remark: remark || null,
+      progress: progress || null
+    })
+    
+    // Handle both array and single object response
+    const data = response.data
+    return Array.isArray(data) ? data[0] : data
+  } catch (error) {
+    console.error('Error creating activity update:', error)
+    return null
+  }
+}
+
 // Fetch daily activities
 export async function fetchDailyActivities(date?: string): Promise<Activity[]> {
   try {
@@ -143,25 +170,6 @@ export async function fetchDailyActivities(date?: string): Promise<Activity[]> {
   } catch (error) {
     console.error('Error fetching daily activities:', error);
     return [];
-  }
-}
-
-// Create activity update (for tracking changes)
-export async function createActivityUpdate(
-  activityId: string,
-  status: "pending" | "done",
-  remark?: string
-): Promise<ActivityUpdate | null> {
-  try {
-    const response = await axiosInstance.post('/activity-updates', {
-      activity_id: activityId,
-      status,
-      remark: remark || '',
-    })
-    return response.data
-  } catch (error) {
-    console.error('Error creating activity update:', error)
-    return null
   }
 }
 
